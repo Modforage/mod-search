@@ -4,6 +4,8 @@
 		<title></title>
 		<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/lodash@4.17.15/lodash.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.8.4/Sortable.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/Vue.Draggable/2.20.0/vuedraggable.umd.min.js"></script>
 	</head>
 	<body>
 		<div id="app">
@@ -14,35 +16,73 @@
 			
 			let modsearch = Vue.component('modsearch', {
 				template: `
-				<div class="mod-search-container">
-					<div class="mod-search mod-wrapper">
-						<div class="mod-search-select-container">
-							<select class="mod-search-select" v-model="cars.build.year.value" @change="getMakes">
-								<option disabled value="">Select a year</option>
-								<option v-for="option in cars.build.year.options" :value="option">{{option}}</option>
-							</select>
+				<div class="mod-container">
+					<div class="mod-page-create-build mod-wrapper">
+
+						<div class="mod-search">
+							<div class="mod-search-container">
+								<div class="mod-search-select-container">
+									<select class="mod-search-select" v-model="cars.build.year.value" @change="getMakes">
+										<option disabled value="">Select a year</option>
+										<option v-for="option in cars.build.year.options" :value="option">{{option}}</option>
+									</select>
+								</div>
+								<div class="mod-search-select-container">
+									<select class="mod-search-select" v-model="cars.build.make.value" @change="getModels">
+										<option disabled value="">Select a make</option>
+										<option v-for="option in cars.build.make.options" :value="option">{{option}}</option>
+									</select>
+								</div>
+								<div class="mod-search-select-container">
+									<select class="mod-search-select" v-model="cars.build.model.value" @change="getTrims">
+										<option disabled value="">Select a model</option>
+										<option v-for="option in cars.build.model.options" :value="option">{{option}}</option>
+									</select>
+								</div>
+								<div class="mod-search-select-container">
+									<select class="mod-search-select" v-model="cars.build.trim.value" @change="setBuild">
+										<option disabled value="">Select a trim</option>
+										<option v-for="option in cars.build.trim.options" :value="option">{{option.name}}</option>
+									</select>
+								</div>
+							</div>
 						</div>
-						<div class="mod-search-select-container">
-							<select class="mod-search-select" v-model="cars.build.make.value" @change="getModels">
-								<option disabled value="">Select a make</option>
-								<option v-for="option in cars.build.make.options" :value="option">{{option}}</option>
-							</select>
+						
+						<div class="mod-user-builds">
+							<div class="mod-user-builds-container">
+								<draggable v-model="cars.builds" @change="updateBuildsOrder">
+								    <transition-group>
+								        <div class="mod-user-build mod-wrapper" v-for="(build, index) in cars.builds" :key="build.uid">
+											<div class="mod-user-build-info mod-wrapper">
+												<div class="mod-user-build-name">{{build.year}} {{build.make}} {{build.model}} {{build.trim}}</div>
+												<div class="mod-user-build-status mod-wrapper">
+													<div class="mod-user-build-ownership">
+														<label class="mod-wrapper" @change="updateBuildOwnership">
+															<input type="checkbox" v-model="build.ownership">
+															<div v-if="build.ownership">
+																currently own
+															</div>
+															<div v-if="!build.ownership">
+																sold
+															</div>
+														</label>
+													</div>
+												</div>
+											</div>
+											<div class="mod-user-build-remove mod-wrapper" @click="remove(index)">remove</div>
+										</div>
+								    </transition-group>
+								</draggable>
+							</div>
 						</div>
-						<div class="mod-search-select-container">
-							<select class="mod-search-select" v-model="cars.build.model.value" @change="getTrims">
-								<option disabled value="">Select a model</option>
-								<option v-for="option in cars.build.model.options" :value="option">{{option}}</option>
-							</select>
-						</div>
-						<div class="mod-search-select-container">
-							<select class="mod-search-select" v-model="cars.build.trim.value" @change="setBuild">
-								<option disabled value="">Select a trim</option>
-								<option v-for="option in cars.build.trim.options" :value="option">{{option.name}}</option>
-							</select>
-						</div>
-					</div>
-					<div v-for="(build, index) in cars.builds" @click="remove(index)">
-						{{build}}
+
+						<transition name="fade">
+							<div class="mod-page-create-build-overlay mod-wrapper" v-if="cars.overlay">
+								<button @click="addDuplicate()">Add</button>
+								<button @click="cancelDuplicate()">Cancel</button>
+							</div>
+						</transition>
+
 					</div>
 				</div>
 				`,
@@ -112,24 +152,50 @@
 						this.cars.build.trim.options = Array.from(trims).sort();
 					},
 					setBuild() {
-						let buildIds = [], build = {}, reset = {};
+						let buildIds = [], build = {};
 						this.cars.builds.map((build) => {
 							buildIds.push(build.id);
 						});
 						Object.keys(this.cars.build).map((item) => {
 							build[item] = this.cars.build[item].value;
-							reset[item] = {value: "", options: ""};
 						});
 						if(_.includes(buildIds,build.trim.id)) {
-							console.log('This build already exists in your garage');
+							this.cars.overlay = true;
+							build.id = build.trim.id;
+							build.uid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+							build.trim = build.trim.name;
+							build.ownership = true;
+							this.cars.duplicate = build;
 						}
 						else {
 							build.id = build.trim.id;
+							build.uid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 							build.trim = build.trim.name;
+							build.ownership = true;
 							this.cars.builds.push(build);
 							localStorage.setItem('builds', JSON.stringify(this.cars.builds));
+							this.clearBuild();
+							this.buildSearch();
 						}
+					},
+					clearBuild() {
+						let reset = {};
+						Object.keys(this.cars.build).map((item) => {
+							reset[item] = {value: "", options: ""};
+						});
 						this.cars.build = reset;
+					},
+					addDuplicate() {
+						this.cars.builds.push(this.cars.duplicate);
+						localStorage.setItem('builds', JSON.stringify(this.cars.builds));
+						this.cars.duplicate = "";
+						this.cars.overlay = false;
+						this.clearBuild();
+						this.buildSearch();
+					},
+					cancelDuplicate() {
+						this.cars.overlay = false;
+						this.clearBuild();
 						this.buildSearch();
 					},
 					setData(obj) {
@@ -144,6 +210,12 @@
 							cars[car.make][car.model]['generations'].push({ years: _.range([car.year_start], (car.year_end + 1), [1]), trims: [{"name":car.trim,"id":car.id}] });
 						});
 						Vue.set(this.cars,'search',cars);
+					},
+					updateBuildOwnership() {
+						localStorage.setItem('builds', JSON.stringify(this.cars.builds));
+					},
+					updateBuildsOrder() {
+						localStorage.setItem('builds', JSON.stringify(this.cars.builds));
 					},
 					remove (index) {
 						this.cars.builds.splice(index, 1);
@@ -187,7 +259,9 @@
 							}
 						},
 						builds: [],
-						search: {}
+						search: {},
+						overlay: false,
+						duplicate: ""
 					}
 				}
 			});
@@ -199,15 +273,42 @@
 				padding: 0px;
 				margin: 0px;
 			}
-			.mod-search-container {
-				
+			.mod-wrapper {
+				-webkit-flex-wrap: wrap;
+				flex-wrap: wrap;
+				-ms-box-orient: horizontal;
+				display: -webkit-box;
+				display: -moz-box;
+				display: -ms-flexbox;
+				display: -moz-flex;
+				display: -webkit-flex;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				-webkit-justify-content: center;
+				height: inherit;
+				min-height: inherit;
+			}
+			.mod-container {
+				width: 1200px;
+				max-width: 90%;
+				margin: 0 auto;
+			}
+			.mod-page-create-build {
+				align-items: flex-start;
+				padding: 100px 0px;
 			}
 			.mod-search {
 				width: 300px;
+			}
+			.mod-search-container {
 				padding: 10px;
 			}
 			.mod-search-select-container {
 				margin-bottom: 10px;
+			}
+			.mod-search-select-container:last-child {
+				margin: 0px;
 			}
 			.mod-search-select {
 				width: 100%;
@@ -220,6 +321,49 @@
 				-webkit-appearance: none;
 				background: #fff;
 				border: 1px solid rgba(20,20,20,0.1);
+			}
+			.mod-user-builds {
+				width: calc(100% - 300px);
+			}
+			.mod-user-builds-container {
+				padding: 10px;
+			}
+			.mod-user-build {
+			    margin-bottom: 10px;
+			}
+			.mod-user-build:last-child {
+				margin: 0px;
+			}
+			.mod-user-build-info {
+			    width: calc(100% - 80px);
+			    justify-content: flex-start;
+			}
+			.mod-user-build-status {
+				width: 100%;
+				justify-content: flex-start;
+			}
+			.mod-user-build-remove {
+			    width: 80px;
+			    height: 46px;
+			    background: red;
+			    color: #fff;
+			    font-family: monospace;
+			    text-align: center;
+			}
+			.mod-page-create-build-overlay {
+				position: fixed;
+				top: 0px;
+				left: 0px;
+				width: 100%;
+				height: 100%;
+				background: rgba(20,20,20,0.75);
+				z-index: 1000;
+			}
+			.fade-enter-active, .fade-leave-active {
+				transition: opacity .5s;
+			}
+			.fade-enter, .fade-leave-to /* .fade-leave-active below version 2.1.8 */ {
+				opacity: 0;
 			}
 		</style>
 
