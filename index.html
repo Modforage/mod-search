@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title></title>
+		<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/lodash@4.17.15/lodash.min.js"></script>
+	</head>
+	<body>
+		<div id="app">
+			<modsearch :cars="cars"></modsearch>
+		</div>
+	
+		<script>
+			
+			let modsearch = Vue.component('modsearch', {
+				template: `
+				<div class="mod-search-container">
+					<div class="mod-search mod-wrapper">
+						<div class="mod-search-select-container">
+							<select class="mod-search-select" v-model="cars.build.year.value" @change="getMakes">
+								<option disabled value="">Select a year</option>
+								<option v-for="option in cars.build.year.options" :value="option">{{option}}</option>
+							</select>
+						</div>
+						<div class="mod-search-select-container">
+							<select class="mod-search-select" v-model="cars.build.make.value" @change="getModels">
+								<option disabled value="">Select a make</option>
+								<option v-for="option in cars.build.make.options" :value="option">{{option}}</option>
+							</select>
+						</div>
+						<div class="mod-search-select-container">
+							<select class="mod-search-select" v-model="cars.build.model.value" @change="getTrims">
+								<option disabled value="">Select a model</option>
+								<option v-for="option in cars.build.model.options" :value="option">{{option}}</option>
+							</select>
+						</div>
+						<div class="mod-search-select-container">
+							<select class="mod-search-select" v-model="cars.build.trim.value" @change="setBuild">
+								<option disabled value="">Select a trim</option>
+								<option v-for="option in cars.build.trim.options" :value="option">{{option.name}}</option>
+							</select>
+						</div>
+					</div>
+					<div v-for="(build, index) in cars.builds" @click="remove(index)">
+						{{build}}
+					</div>
+				</div>
+				`,
+				props: ['cars'],
+				methods: {
+					buildSearch() {
+						this.getYears();
+					},
+					getYears() {
+						let years = new Set();
+						Object.keys(this.cars.search).map((make) => {
+							Object.keys(this.cars.search[make]).map((models) => {
+								this.cars.search[make][models].generations.map((gen) => {
+									gen.years.map((year) => {
+										years.add(year);
+									});
+								});
+							});
+						});
+						this.cars.build.year.options = Array.from(years).sort();
+					},
+					getMakes() {
+						let makes = new Set();
+						this.cars.build.make.value = "";
+						this.cars.build.make.options = "";
+						this.cars.build.model.value = "";
+						this.cars.build.model.options = "";
+						this.cars.build.trim.value = "";
+						this.cars.build.trim.options = "";
+						Object.keys(this.cars.search).map((make) => {
+							Object.keys(this.cars.search[make]).map((models) => {
+								this.cars.search[make][models].generations.map((gen) => {
+									if(_.includes(gen.years,this.cars.build.year.value)) {
+										makes.add(make);
+									}
+								});
+							});
+						});
+						this.cars.build.make.options = Array.from(makes).sort();
+					},
+					getModels() {
+						let models = new Set();
+						this.cars.build.model.value = "";
+						this.cars.build.model.options = "";
+						this.cars.build.trim.value = "";
+						this.cars.build.trim.options = "";
+						Object.keys(this.cars.search[this.cars.build.make.value]).map((model) => {
+							this.cars.search[this.cars.build.make.value][model].generations.map((gen) => {
+								if(_.includes(gen.years,this.cars.build.year.value)) {
+									models.add(model);
+								}
+							});
+						});
+						this.cars.build.model.options = Array.from(models).sort();
+					},
+					getTrims() {
+						let trims = new Set();
+						this.cars.build.trim.value = "";
+						this.cars.build.trim.options = "";
+						this.cars.search[this.cars.build.make.value][this.cars.build.model.value].generations.map((gen) => {
+							if(_.includes(gen.years,this.cars.build.year.value)) {
+								gen.trims.map((trim) => {
+									trims.add(trim);
+								});
+							}
+						});
+						this.cars.build.trim.options = Array.from(trims).sort();
+					},
+					setBuild() {
+						let buildIds = [], build = {}, reset = {};
+						this.cars.builds.map((build) => {
+							buildIds.push(build.id);
+						});
+						Object.keys(this.cars.build).map((item) => {
+							build[item] = this.cars.build[item].value;
+							reset[item] = {value: "", options: ""};
+						});
+						if(_.includes(buildIds,build.trim.id)) {
+							console.log('This build already exists in your garage');
+						}
+						else {
+							build.id = build.trim.id;
+							build.trim = build.trim.name;
+							this.cars.builds.push(build);
+							localStorage.setItem('builds', JSON.stringify(this.cars.builds));
+						}
+						this.cars.build = reset;
+						this.buildSearch();
+					},
+					setData(obj) {
+						let cars = {};
+						obj.list.map((map) => {
+							cars[map.make] = {};
+						});
+						obj.list.map((map) => {
+							cars[map.make][map.model] = { "generations": [] };
+						});
+						obj.cars.map((car) => {
+							cars[car.make][car.model]['generations'].push({ years: _.range([car.year_start], (car.year_end + 1), [1]), trims: [{"name":car.trim,"id":car.id}] });
+						});
+						Vue.set(this.cars,'search',cars);
+					},
+					remove (index) {
+						this.cars.builds.splice(index, 1);
+						localStorage.setItem('builds', JSON.stringify(this.cars.builds));
+					}
+				},
+				created() {
+					let obj = {"cars":[{"id":1,"unique_id":null,"make":"Honda","model":"Civic","trim":"Si Coupe","data":null,"year_start":2006,"year_end":2011,"created_at":null,"updated_at":null},{"id":2,"unique_id":null,"make":"Honda","model":"Civic","trim":"Si Sedan","data":null,"year_start":2007,"year_end":2011,"created_at":null,"updated_at":null},{"id":3,"unique_id":null,"make":"Honda","model":"Civic","trim":"Mugen Si","data":null,"year_start":2008,"year_end":2008,"created_at":null,"updated_at":null},{"id":4,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C63 AMG Coupe (P30)","data":null,"year_start":2008,"year_end":2010,"created_at":null,"updated_at":null},{"id":5,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C63 AMG Sedan (P30)","data":null,"year_start":2008,"year_end":2010,"created_at":null,"updated_at":null},{"id":6,"unique_id":null,"make":"Honda","model":"S2000","trim":"AP1","data":null,"year_start":1999,"year_end":2003,"created_at":null,"updated_at":null},{"id":7,"unique_id":null,"make":"Honda","model":"S2000","trim":"AP2","data":null,"year_start":2003,"year_end":2009,"created_at":null,"updated_at":null},{"id":8,"unique_id":null,"make":"Acura","model":"Integra","trim":"RSX","data":null,"year_start":2002,"year_end":2006,"created_at":null,"updated_at":null},{"id":9,"unique_id":null,"make":"Honda","model":"Civic","trim":"Si Coupe","data":null,"year_start":2012,"year_end":2015,"created_at":null,"updated_at":null},{"id":10,"unique_id":null,"make":"Honda","model":"Civic","trim":"Si Sedan","data":null,"year_start":2012,"year_end":2015,"created_at":null,"updated_at":null},{"id":11,"unique_id":null,"make":"Honda","model":"Civic","trim":"Si Coupe","data":null,"year_start":2017,"year_end":2019,"created_at":null,"updated_at":null},{"id":12,"unique_id":null,"make":"Honda","model":"Civic","trim":"Si Sedan","data":null,"year_start":2017,"year_end":2019,"created_at":null,"updated_at":null},{"id":13,"unique_id":null,"make":"Honda","model":"Civic","trim":"Type R","data":null,"year_start":2017,"year_end":2019,"created_at":null,"updated_at":null},{"id":14,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C63 AMG Coupe (P31)","data":null,"year_start":2011,"year_end":2015,"created_at":null,"updated_at":null},{"id":15,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C63 AMG Sedan (P31)","data":null,"year_start":2011,"year_end":2015,"created_at":null,"updated_at":null},{"id":16,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C63 AMG Coupe Black Series","data":null,"year_start":2011,"year_end":2015,"created_at":null,"updated_at":null},{"id":17,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C63 AMG Coupe Edition 507","data":null,"year_start":2013,"year_end":2015,"created_at":null,"updated_at":null},{"id":18,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C63 AMG Sedan Edition 507","data":null,"year_start":2013,"year_end":2015,"created_at":null,"updated_at":null},{"id":19,"unique_id":null,"make":"Mitsubishi","model":"Lancer","trim":"Evolution 8 RS","data":null,"year_start":2003,"year_end":2005,"created_at":null,"updated_at":null},{"id":20,"unique_id":null,"make":"Mitsubishi","model":"Lancer","trim":"Evolution 8 MR","data":null,"year_start":2003,"year_end":2005,"created_at":null,"updated_at":null},{"id":21,"unique_id":null,"make":"Mitsubishi","model":"Lancer","trim":"Evolution 9","data":null,"year_start":2006,"year_end":2006,"created_at":null,"updated_at":null},{"id":22,"unique_id":null,"make":"Mitsubishi","model":"Lancer","trim":"Evolution 9 RS","data":null,"year_start":2006,"year_end":2006,"created_at":null,"updated_at":null},{"id":23,"unique_id":null,"make":"Mitsubishi","model":"Lancer","trim":"Evolution 9 SE","data":null,"year_start":2006,"year_end":2006,"created_at":null,"updated_at":null},{"id":24,"unique_id":null,"make":"Mitsubishi","model":"Lancer","trim":"Evolution 9 MR","data":null,"year_start":2006,"year_end":2006,"created_at":null,"updated_at":null},{"id":25,"unique_id":null,"make":"Mitsubishi","model":"Lancer","trim":"Evolution X GSR","data":null,"year_start":2008,"year_end":2014,"created_at":null,"updated_at":null},{"id":26,"unique_id":null,"make":"Mitsubishi","model":"Lancer","trim":"Evolution X MR","data":null,"year_start":2008,"year_end":2014,"created_at":null,"updated_at":null},{"id":27,"unique_id":null,"make":"Mitsubishi","model":"Lancer","trim":"Evolution X Final Edition","data":null,"year_start":2015,"year_end":2015,"created_at":null,"updated_at":null},{"id":28,"unique_id":null,"make":"Subaru","model":"BRZ","trim":"Limited","data":null,"year_start":2012,"year_end":2019,"created_at":null,"updated_at":null},{"id":29,"unique_id":null,"make":"Subaru","model":"BRZ","trim":"Premium","data":null,"year_start":2012,"year_end":2019,"created_at":null,"updated_at":null},{"id":30,"unique_id":null,"make":"Subaru","model":"Impreza","trim":"WRX","data":null,"year_start":2001,"year_end":2002,"created_at":null,"updated_at":null},{"id":31,"unique_id":null,"make":"Subaru","model":"Impreza","trim":"WRX STI","data":null,"year_start":2001,"year_end":2002,"created_at":null,"updated_at":null},{"id":32,"unique_id":null,"make":"Subaru","model":"Impreza","trim":"WRX","data":null,"year_start":2003,"year_end":2005,"created_at":null,"updated_at":null},{"id":33,"unique_id":null,"make":"Subaru","model":"Impreza","trim":"WRX STI","data":null,"year_start":2003,"year_end":2005,"created_at":null,"updated_at":null},{"id":34,"unique_id":null,"make":"Subaru","model":"Impreza","trim":"WRX","data":null,"year_start":2006,"year_end":2007,"created_at":null,"updated_at":null},{"id":35,"unique_id":null,"make":"Subaru","model":"Impreza","trim":"WRX STI","data":null,"year_start":2006,"year_end":2007,"created_at":null,"updated_at":null},{"id":36,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C43 AMG Coupe","data":null,"year_start":2017,"year_end":2020,"created_at":null,"updated_at":null},{"id":37,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C43 AMG Sedan","data":null,"year_start":2017,"year_end":2020,"created_at":null,"updated_at":null},{"id":38,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C63 AMG Coupe","data":null,"year_start":2016,"year_end":2020,"created_at":null,"updated_at":null},{"id":39,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C63 AMG Sedan","data":null,"year_start":2016,"year_end":2020,"created_at":null,"updated_at":null},{"id":40,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C63 S AMG Coupe","data":null,"year_start":2016,"year_end":2020,"created_at":null,"updated_at":null},{"id":41,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C63 S AMG Sedan","data":null,"year_start":2016,"year_end":2020,"created_at":null,"updated_at":null},{"id":42,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C63 S AMG Coupe Edition 1","data":null,"year_start":2016,"year_end":2016,"created_at":null,"updated_at":null},{"id":43,"unique_id":null,"make":"Mercedes","model":"C-Class","trim":"C63 S AMG Sedan Edition 1","data":null,"year_start":2016,"year_end":2016,"created_at":null,"updated_at":null}],"list":[{"make":"Acura","model":"Integra"},{"make":"Honda","model":"Civic"},{"make":"Honda","model":"S2000"},{"make":"Mercedes","model":"C-Class"},{"make":"Mitsubishi","model":"Lancer"},{"make":"Subaru","model":"BRZ"},{"make":"Subaru","model":"Impreza"}]};
+					this.setData(obj);
+				},
+				mounted() {
+					let builds;
+					builds = localStorage.getItem('builds');
+					if(builds) {
+						Vue.set(this.cars,'builds',JSON.parse(builds));
+					}
+					this.buildSearch();
+				}
+			});
+
+			let app = new Vue({
+				el: "#app",
+				data: {
+					cars: {
+						build: {
+							year: {
+								value: "",
+								options: ""
+							},
+							make: {
+								value: "",
+								options: ""
+							},
+							model: {
+								value: "",
+								options: ""
+							},
+							trim: {
+								value: "",
+								options: ""
+							}
+						},
+						builds: [],
+						search: {}
+					}
+				}
+			});
+
+		</script>
+
+		<style scoped>
+			body {
+				padding: 0px;
+				margin: 0px;
+			}
+			.mod-search-container {
+				
+			}
+			.mod-search {
+				width: 300px;
+				padding: 10px;
+			}
+			.mod-search-select-container {
+				margin-bottom: 10px;
+			}
+			.mod-search-select {
+				width: 100%;
+				height: 46px;
+				text-indent: 10px;
+				font-size: 16px;
+				font-weight: 300;
+				outline: none;
+				border-radius: 0;
+				-webkit-appearance: none;
+				background: #fff;
+				border: 1px solid rgba(20,20,20,0.1);
+			}
+		</style>
+
+	</body>
+</html>
